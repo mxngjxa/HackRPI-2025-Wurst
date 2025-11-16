@@ -1,6 +1,5 @@
-// Frontend logic for the Time Console RAG Terminal
-
-const API_BASE_URL = "http://127.0.0.1:8000"; // Default FastAPI port
+// SYNTHWAVE TERMINAL 2085 - NEURAL INTERFACE SYSTEM
+const API_BASE_URL = "http://127.0.0.1:8000";
 
 // DOM Elements
 const sessionIdEl = document.getElementById('session-id');
@@ -14,85 +13,149 @@ const uploadBtn = document.getElementById('upload-btn');
 const fileListEl = document.getElementById('file-list');
 const fileCountEl = document.getElementById('file-count');
 const errorToastContainer = document.getElementById('error-toast-container');
+const currentTimeEl = document.getElementById('current-time');
 
-// State
+// State Management
 let currentSessionId = null;
 let selectedFiles = [];
-const MAX_FILES_PER_SESSION = 5; // Must match backend/config.py
+const MAX_FILES_PER_SESSION = 5;
 
-// --- Utility Functions ---
+// === SYNTHWAVE EFFECTS ===
+function initSynthwaveEffects() {
+    // Update clock
+    setInterval(() => {
+        const now = new Date();
+        currentTimeEl.textContent = now.toLocaleTimeString('en-US', { 
+            hour12: false, 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit' 
+        });
+    }, 1000);
 
-/**
- * Displays a retro-styled error toast.
- * @param {string} message - The error message.
- */
+    // Add typing effect to messages
+    document.addEventListener('DOMContentLoaded', () => {
+        typeWriterEffect('INITIALIZING NEURAL INTERFACE...', 'system');
+    });
+
+    // Add hover sound effects (visual feedback instead of actual sound)
+    document.querySelectorAll('.neon-button, .send-button').forEach(button => {
+        button.addEventListener('mouseenter', () => {
+            button.style.transform = 'scale(1.02)';
+        });
+        button.addEventListener('mouseleave', () => {
+            button.style.transform = 'scale(1)';
+        });
+    });
+}
+
+// === UTILITY FUNCTIONS ===
 function showToast(message) {
     const toast = document.createElement('div');
     toast.className = 'error-toast';
-    toast.textContent = `[ERROR] ${message}`;
+    toast.innerHTML = `<span>${message}</span>`;
     errorToastContainer.appendChild(toast);
 
     setTimeout(() => {
-        toast.remove();
+        toast.style.animation = 'toast-slide-out 0.5s ease';
+        setTimeout(() => toast.remove(), 500);
     }, 5000);
 }
 
-/**
- * Scrolls the chat history to the bottom.
- */
 function scrollToBottom() {
-    chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+    setTimeout(() => {
+        chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+    }, 100);
 }
 
-/**
- * Renders a message in the chat history.
- * @param {'user'|'assistant'|'system'} type - Type of message.
- * @param {string} content - Message content.
- */
+function typeWriterEffect(text, type, callback) {
+    const messageEl = document.createElement('div');
+    messageEl.className = `chat-message ${type}-message`;
+
+    let prefix = '';
+    if (type === 'user') {
+        prefix = '[USER] ';
+    } else if (type === 'assistant') {
+        prefix = '[NEURAL-NET] ';
+    } else if (type === 'system') {
+        prefix = '[SYSTEM] ';
+    }
+
+    messageEl.innerHTML = prefix;
+    chatHistoryEl.appendChild(messageEl);
+
+    let index = 0;
+    const typingSpeed = 30; // Faster typing for that retro feel
+
+    function typeChar() {
+        if (index < text.length) {
+            messageEl.innerHTML = prefix + text.substring(0, index + 1) + 
+                '<span class="terminal-cursor"></span>';
+            index++;
+            setTimeout(typeChar, typingSpeed);
+            scrollToBottom();
+        } else {
+            messageEl.innerHTML = prefix + text;
+            if (callback) callback();
+        }
+    }
+
+    typeChar();
+}
+
 function renderMessage(type, content) {
     const messageEl = document.createElement('div');
     messageEl.className = `chat-message ${type}-message`;
-    
+
     let prefix = '';
     if (type === 'user') {
-        prefix = '<span class="neon-text-cyan">[USER]</span> ';
+        prefix = '[USER] ';
     } else if (type === 'assistant') {
-        prefix = '<span class="neon-text-magenta">[ASSISTANT]</span> ';
+        prefix = '[NEURAL-NET] ';
     } else if (type === 'system') {
-        prefix = '<span class="neon-text-cyan">[SYSTEM]</span> ';
+        prefix = '[SYSTEM] ';
     }
 
-    // Simple markdown-like formatting for newlines
+    // Add glitch effect randomly to system messages
+    if (type === 'system' && Math.random() > 0.7) {
+        messageEl.classList.add('glitch');
+        messageEl.setAttribute('data-text', prefix + content);
+    }
+
     const formattedContent = content.replace(/\n/g, '<br>');
-    
     messageEl.innerHTML = prefix + formattedContent;
     chatHistoryEl.appendChild(messageEl);
     scrollToBottom();
+
+    // Add fade-in effect
+    messageEl.style.animation = 'message-appear 0.5s ease';
 }
 
-/**
- * Updates the file list display in the Documents Bay.
- */
 function updateFileList() {
     fileListEl.innerHTML = '';
+
     selectedFiles.forEach((file, index) => {
         const item = document.createElement('div');
         item.className = 'file-item';
-        
+        item.style.animationDelay = `${index * 0.1}s`;
+
         const nameEl = document.createElement('span');
         nameEl.className = 'file-name';
         nameEl.textContent = file.name;
 
         const statusEl = document.createElement('span');
         statusEl.className = 'file-status status-pending';
-        statusEl.textContent = 'PENDING';
-        file.statusEl = statusEl; // Store reference for later update
+        statusEl.textContent = 'READY';
+        file.statusEl = statusEl;
 
         const removeBtn = document.createElement('button');
-        removeBtn.textContent = 'X';
-        removeBtn.className = 'retro-button stop-btn';
-        removeBtn.style.padding = '2px 5px';
-        removeBtn.style.fontSize = '0.8em';
+        removeBtn.innerHTML = '✖';
+        removeBtn.className = 'neon-button';
+        removeBtn.style.width = '30px';
+        removeBtn.style.height = '30px';
+        removeBtn.style.padding = '0';
+        removeBtn.style.fontSize = '1.2em';
+        removeBtn.style.marginBottom = '0';
         removeBtn.onclick = () => removeFile(index);
 
         item.appendChild(nameEl);
@@ -101,63 +164,64 @@ function updateFileList() {
         fileListEl.appendChild(item);
     });
 
-    fileCountEl.textContent = `(${selectedFiles.length}/${MAX_FILES_PER_SESSION})`;
+    fileCountEl.textContent = `${selectedFiles.length}/${MAX_FILES_PER_SESSION}`;
     uploadBtn.disabled = selectedFiles.length === 0;
 }
 
-/**
- * Removes a file from the selected list.
- * @param {number} index - Index of the file to remove.
- */
 function removeFile(index) {
     selectedFiles.splice(index, 1);
     updateFileList();
+
+    if (selectedFiles.length === 0) {
+        renderMessage('system', 'Data buffer cleared.');
+    }
 }
 
-// --- API Calls ---
-
-/**
- * Calls the /session endpoint to get a new session ID.
- */
+// === API CALLS ===
 async function getNewSession() {
     try {
-        renderMessage('system', 'Requesting new session ID from Time Console...');
+        renderMessage('system', 'ESTABLISHING QUANTUM LINK...');
+
         const response = await fetch(`${API_BASE_URL}/session`, { method: 'POST' });
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
+
         const data = await response.json();
         currentSessionId = data.session_id;
-        sessionIdEl.textContent = currentSessionId;
+        sessionIdEl.textContent = currentSessionId.toUpperCase();
         questionInput.disabled = false;
         sendBtn.disabled = false;
-        renderMessage('system', `New session established. ID: ${currentSessionId}`);
+
+        setTimeout(() => {
+            renderMessage('system', `✓ NEURAL LINK ESTABLISHED`);
+            renderMessage('system', `SESSION ID: ${currentSessionId.toUpperCase()}`);
+        }, 500);
+
     } catch (error) {
         console.error('Error getting new session:', error);
-        showToast(`Failed to establish session: ${error.message}`);
+        showToast(`CONNECTION FAILED: ${error.message}`);
+        renderMessage('system', '✗ UNABLE TO ESTABLISH NEURAL LINK');
         questionInput.disabled = true;
         sendBtn.disabled = true;
     }
 }
 
-/**
- * Calls the /upload endpoint to process files.
- */
 async function handleUploadFiles() {
     if (selectedFiles.length === 0) return;
 
     uploadBtn.disabled = true;
     questionInput.disabled = true;
     sendBtn.disabled = true;
-    renderMessage('system', `Initiating upload of ${selectedFiles.length} file(s)...`);
+
+    renderMessage('system', `UPLOADING ${selectedFiles.length} FILE(S) TO NEURAL MATRIX...`);
 
     const formData = new FormData();
     formData.append('session_id', currentSessionId);
-    
-    // Append files to FormData
+
     selectedFiles.forEach(file => {
         formData.append('files', file, file.name);
-        file.statusEl.textContent = 'UPLOADING...';
+        file.statusEl.textContent = 'UPLOADING';
         file.statusEl.className = 'file-status status-pending';
     });
 
@@ -172,38 +236,42 @@ async function handleUploadFiles() {
         }
 
         const data = await response.json();
-        
-        // Update file list status based on backend response
-        let successCount = 0;
-        let errorMessages = [];
-        
-        // The backend returns a list of errors, one for each failed file.
-        // Since the backend only processes the first MAX_FILES_PER_SESSION, 
-        // we need to match the errors to the files. This is tricky without 
-        // a file-specific ID in the response. We'll rely on the success_count 
-        // and the error list to construct a system message.
-        
+
+        // Update file status
+        selectedFiles.forEach((file, index) => {
+            if (index < data.success_count) {
+                file.statusEl.textContent = 'INTEGRATED';
+                file.statusEl.className = 'file-status status-success';
+            }
+        });
+
         if (data.success_count > 0) {
-            renderMessage('system', `✓ Successfully processed ${data.success_count} file(s).`);
+            renderMessage('system', `✓ ${data.success_count} FILE(S) INTEGRATED INTO NEURAL MATRIX`);
         }
-        
+
         if (data.errors.length > 0) {
-            let errorMsg = "⚠ Upload Errors:\n";
             data.errors.forEach(err => {
-                errorMsg += `  • ${err}\n`;
+                renderMessage('system', `⚠ ERROR: ${err}`);
             });
-            renderMessage('system', errorMsg);
-            showToast(`Upload finished with ${data.errors.length} error(s).`);
+            showToast(`UPLOAD COMPLETED WITH ${data.errors.length} ERROR(S)`);
         }
-        
-        // Clear selected files after processing
-        selectedFiles = [];
-        updateFileList();
+
+        // Clear files after successful upload
+        setTimeout(() => {
+            selectedFiles = [];
+            updateFileList();
+        }, 2000);
 
     } catch (error) {
         console.error('Error during upload:', error);
-        showToast(`Upload failed: ${error.message}`);
-        renderMessage('system', `✗ Upload failed due to a network or server error: ${error.message}`);
+        showToast(`UPLOAD FAILED: ${error.message}`);
+        renderMessage('system', `✗ NEURAL INTEGRATION FAILED: ${error.message}`);
+
+        selectedFiles.forEach(file => {
+            file.statusEl.textContent = 'FAILED';
+            file.statusEl.className = 'file-status status-error';
+        });
+
     } finally {
         uploadBtn.disabled = false;
         questionInput.disabled = false;
@@ -211,26 +279,28 @@ async function handleUploadFiles() {
     }
 }
 
-/**
- * Calls the /question endpoint to get an answer.
- * @param {string} question - The user's question.
- */
 async function handleSendQuestion(question) {
     if (!question.trim()) return;
 
     questionInput.disabled = true;
     sendBtn.disabled = true;
-    
-    // Add user message to history
-    renderMessage('user', question);
-    questionInput.value = ''; // Clear input immediately
 
-    // Placeholder for assistant's response
-    const assistantMessageEl = document.createElement('div');
-    assistantMessageEl.className = 'chat-message assistant-message';
-    assistantMessageEl.innerHTML = '<span class="neon-text-magenta">[ASSISTANT]</span> <span class="typing-indicator">...</span>';
-    chatHistoryEl.appendChild(assistantMessageEl);
+    renderMessage('user', question);
+    questionInput.value = '';
+
+    // Add thinking animation
+    const thinkingEl = document.createElement('div');
+    thinkingEl.className = 'chat-message assistant-message';
+    thinkingEl.innerHTML = '[NEURAL-NET] PROCESSING<span class="thinking-dots"></span>';
+    chatHistoryEl.appendChild(thinkingEl);
     scrollToBottom();
+
+    // Animate dots
+    let dots = 0;
+    const dotsInterval = setInterval(() => {
+        dots = (dots + 1) % 4;
+        thinkingEl.querySelector('.thinking-dots').textContent = '.'.repeat(dots);
+    }, 500);
 
     try {
         const response = await fetch(`${API_BASE_URL}/question`, {
@@ -244,10 +314,12 @@ async function handleSendQuestion(question) {
             }),
         });
 
+        clearInterval(dotsInterval);
+        thinkingEl.remove();
+
         if (response.status === 400) {
             const errorData = await response.json();
-            renderMessage('system', `✗ Validation Error: ${errorData.detail}`);
-            assistantMessageEl.remove(); // Remove placeholder
+            renderMessage('system', `✗ VALIDATION ERROR: ${errorData.detail}`);
             return;
         }
 
@@ -256,16 +328,16 @@ async function handleSendQuestion(question) {
         }
 
         const data = await response.json();
-        
-        // Replace placeholder with actual answer
-        assistantMessageEl.innerHTML = `<span class="neon-text-magenta">[ASSISTANT]</span> ${data.answer.replace(/\n/g, '<br>')}`;
-        scrollToBottom();
+        renderMessage('assistant', data.answer);
 
     } catch (error) {
+        clearInterval(dotsInterval);
+        thinkingEl.remove();
+
         console.error('Error during question:', error);
-        showToast(`Question failed: ${error.message}`);
-        assistantMessageEl.innerHTML = '<span class="neon-text-magenta">[ASSISTANT]</span> ✗ I apologize, but I encountered a critical error while processing your question. Please try again.';
-        scrollToBottom();
+        showToast(`TRANSMISSION FAILED: ${error.message}`);
+        renderMessage('assistant', '✗ NEURAL PROCESSING ERROR. PLEASE RETRY TRANSMISSION.');
+
     } finally {
         questionInput.disabled = false;
         sendBtn.disabled = false;
@@ -273,22 +345,18 @@ async function handleSendQuestion(question) {
     }
 }
 
-/**
- * Calls the /clear endpoint and starts a new session.
- */
 async function handleClearSession() {
     if (!currentSessionId) {
-        // If no session, just start a new one
         chatHistoryEl.innerHTML = '';
         await getNewSession();
         return;
     }
-    
+
     clearSessionBtn.disabled = true;
     questionInput.disabled = true;
     sendBtn.disabled = true;
-    
-    renderMessage('system', `Initiating session reboot for ID: ${currentSessionId}...`);
+
+    renderMessage('system', 'INITIATING SYSTEM RESET...');
 
     try {
         const response = await fetch(`${API_BASE_URL}/clear`, {
@@ -306,19 +374,19 @@ async function handleClearSession() {
         }
 
         const data = await response.json();
-        renderMessage('system', `✓ Session documents cleared: ${data.deleted_count} document(s) deleted.`);
-        
-        // Start a new session
-        chatHistoryEl.innerHTML = '';
-        await getNewSession();
+        renderMessage('system', `✓ NEURAL MATRIX CLEARED: ${data.deleted_count} FILE(S) PURGED`);
+
+        setTimeout(() => {
+            chatHistoryEl.innerHTML = '';
+            getNewSession();
+        }, 1500);
 
     } catch (error) {
         console.error('Error during clear session:', error);
-        showToast(`Session clear failed: ${error.message}`);
-        renderMessage('system', `✗ Warning: Error clearing session documents: ${error.message}`);
-        
-        // Still attempt to get a new session ID to continue
+        showToast(`RESET FAILED: ${error.message}`);
+        renderMessage('system', `✗ SYSTEM RESET ERROR: ${error.message}`);
         await getNewSession();
+
     } finally {
         clearSessionBtn.disabled = false;
         questionInput.disabled = false;
@@ -326,80 +394,76 @@ async function handleClearSession() {
     }
 }
 
-// --- Event Listeners ---
-
-// File selection via button click
+// === EVENT LISTENERS ===
 fileInput.addEventListener('change', (event) => {
     const newFiles = Array.from(event.target.files);
-    
-    // Filter out non-.txt files and files exceeding the limit
     const validFiles = newFiles.filter(file => file.name.endsWith('.txt'));
     const invalidFiles = newFiles.filter(file => !file.name.endsWith('.txt'));
-    
+
     if (invalidFiles.length > 0) {
-        showToast(`Dropped ${invalidFiles.length} non-.txt files.`);
+        showToast(`REJECTED ${invalidFiles.length} NON-.TXT FILE(S)`);
     }
-    
-    // Add valid files, respecting the MAX_FILES_PER_SESSION limit
+
     const remainingSlots = MAX_FILES_PER_SESSION - selectedFiles.length;
     const filesToAdd = validFiles.slice(0, remainingSlots);
-    
+
     if (validFiles.length > remainingSlots) {
-        showToast(`Only the first ${remainingSlots} valid files were added (max ${MAX_FILES_PER_SESSION} total).`);
+        showToast(`BUFFER LIMIT: ONLY ${remainingSlots} FILE(S) ADDED`);
     }
-    
+
     selectedFiles.push(...filesToAdd);
     updateFileList();
-    
-    // Clear the input value so the same file can be selected again
     fileInput.value = '';
 });
 
-// Drag and Drop functionality
+// Drag and Drop
 uploadArea.addEventListener('dragover', (event) => {
     event.preventDefault();
-    uploadArea.style.boxShadow = '0 0 15px var(--color-neon-cyan)';
+    uploadArea.style.borderColor = 'var(--neon-cyan)';
+    uploadArea.style.boxShadow = '0 0 30px var(--neon-cyan)';
 });
 
 uploadArea.addEventListener('dragleave', () => {
-    uploadArea.style.boxShadow = '0 0 5px var(--color-neon-purple)';
+    uploadArea.style.borderColor = '';
+    uploadArea.style.boxShadow = '';
 });
 
 uploadArea.addEventListener('drop', (event) => {
     event.preventDefault();
-    uploadArea.style.boxShadow = '0 0 5px var(--color-neon-purple)';
-    
+    uploadArea.style.borderColor = '';
+    uploadArea.style.boxShadow = '';
+
     const newFiles = Array.from(event.dataTransfer.files);
-    
-    // Filter out non-.txt files and files exceeding the limit
     const validFiles = newFiles.filter(file => file.name.endsWith('.txt'));
     const invalidFiles = newFiles.filter(file => !file.name.endsWith('.txt'));
-    
+
     if (invalidFiles.length > 0) {
-        showToast(`Dropped ${invalidFiles.length} non-.txt files.`);
+        showToast(`REJECTED ${invalidFiles.length} NON-.TXT FILE(S)`);
     }
-    
-    // Add valid files, respecting the MAX_FILES_PER_SESSION limit
+
     const remainingSlots = MAX_FILES_PER_SESSION - selectedFiles.length;
     const filesToAdd = validFiles.slice(0, remainingSlots);
-    
+
     if (validFiles.length > remainingSlots) {
-        showToast(`Only the first ${remainingSlots} valid files were added (max ${MAX_FILES_PER_SESSION} total).`);
+        showToast(`BUFFER LIMIT: ONLY ${remainingSlots} FILE(S) ADDED`);
     }
-    
+
     selectedFiles.push(...filesToAdd);
     updateFileList();
 });
 
-// Upload button click
+// Click on upload area to trigger file input
+uploadArea.addEventListener('click', () => {
+    fileInput.click();
+});
+
+// Button event listeners
 uploadBtn.addEventListener('click', handleUploadFiles);
 
-// Send button click
 sendBtn.addEventListener('click', () => {
     handleSendQuestion(questionInput.value);
 });
 
-// Enter key in question input
 questionInput.addEventListener('keypress', (event) => {
     if (event.key === 'Enter') {
         event.preventDefault();
@@ -407,8 +471,21 @@ questionInput.addEventListener('keypress', (event) => {
     }
 });
 
-// Clear session button click
 clearSessionBtn.addEventListener('click', handleClearSession);
 
-// --- Initialization ---
-document.addEventListener('DOMContentLoaded', getNewSession);
+// === INITIALIZATION ===
+document.addEventListener('DOMContentLoaded', () => {
+    initSynthwaveEffects();
+    getNewSession();
+});
+
+// Add CSS for thinking dots animation
+const style = document.createElement('style');
+style.textContent = `
+    .thinking-dots {
+        display: inline-block;
+        width: 30px;
+        text-align: left;
+    }
+`;
+document.head.appendChild(style);
