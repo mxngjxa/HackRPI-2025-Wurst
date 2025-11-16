@@ -2,6 +2,11 @@
 
 This project is a file-based chatbot that uses a Large Language Model (LLM) to answer questions about uploaded documents. It is built with a Python FastAPI backend and a separate ultra-retro HTML/CSS/JS frontend, using a PostgreSQL database with pgvector for vector storage.
 
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/mxngjxa/HackRPI-2025-Wurst?utm_source=oss&utm_medium=github&utm_campaign=mxngjxa%2FHackRPI-2025-Wurst&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009485.svg?logo=fastapi&logoColor=white)](#)
+[![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=fff)](#)
+
+
 ## Features
 
 -   **File Upload**: Upload text files to the chatbot.
