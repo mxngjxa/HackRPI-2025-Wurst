@@ -33,12 +33,12 @@ class LSHIndexer:
             redis_host=redis_host,
             redis_port=redis_port,
             redis_prefix=LSH_REDIS_PREFIX,
-            vector_fetch_fn=self.fetch_vectors_from_postgres
+            vector_fetch_fn=self._fetch_vectors_for_lshrs
         )
         self.engine = get_engine()
         self.similarity_threshold = LSH_SIMILARITY_THRESHOLD
 
-    def fetch_vectors_from_postgres(self, chunk_ids: List[str]) -> List[Tuple[str, np.ndarray]]:
+    def _fetch_vectors_for_lshrs(self, chunk_ids: List[str]) -> List[Tuple[str, np.ndarray]]:
         """
         Bridge function for LSHRS vector_fetch_fn.
         Fetches full embedding vectors from PostgreSQL for a list of chunk IDs.
@@ -120,8 +120,8 @@ class LSHIndexer:
         BATCH_SIZE = 1000 # As per requirements.md
         
         for document_id, chunks in chunks_by_document.items():
-            chunk_ids = [str(c[0]) for c in chunks]
-            embeddings = [np.array(c[1]) for c in chunks]
+            chunk_ids = [str(c) for c in chunks]
+            embeddings = [np.array(c) for c in chunks]
             
             # Process in batches
             for i in range(0, len(chunk_ids), BATCH_SIZE):
@@ -141,9 +141,38 @@ class LSHIndexer:
         logger.info(f"LSH indexing complete. Total chunks indexed: {indexed_count}")
         return indexed_count
 
-    def hybrid_search(self, query_embedding: np.ndarray, top_k: int = 5) -> List[int]:
+    def index_new_chunks(self, chunk_ids: List[int], embeddings: np.ndarray) -> None:
+        """
+        Indexes new document chunks into the LSH index.
+        
+        Args:
+            chunk_ids: List of chunk IDs (integers) to index.
+            embeddings: Numpy array of embedding vectors corresponding to the IDs.
+        """
+        if not chunk_ids or embeddings.size == 0:
+            logger.warning("index_new_chunks called with empty data.")
+            return
+
+        if len(chunk_ids) != embeddings.shape:
+            raise ValueError(
+                f"ID count ({len(chunk_ids)}) must match embedding count ({embeddings.shape})"
+            )
+
+        logger.info(f"Indexing {len(chunk_ids)} new chunks into LSH index.")
+        
+        # LSHRS expects string IDs
+        str_chunk_ids = [str(cid) for cid in chunk_ids]
+        
+        # Add to LSH index (this handles signature generation and Redis storage)
+        self.lsh.add_vectors(str_chunk_ids, embeddings)
+        
+        logger.debug(f"Successfully indexed {len(chunk_ids)} chunks.")
+
+    def query_similar_chunks(self, query_embedding: np.ndarray, top_k: int) -> List[int]:
         """
         Performs a hybrid search: LSH candidate retrieval followed by cosine reranking.
+        
+        This is the public query function for the retrieval pipeline.
         
         Args:
             query_embedding: The embedding vector of the query.
@@ -174,13 +203,46 @@ class LSHIndexer:
         )
         
         # Sort by similarity (descending) and take top_k
-        reranked_results.sort(key=lambda x: x[1], reverse=True)
+        reranked_results.sort(key=lambda x: x, reverse=True)
         
         # Phase 4: Return top_k results
         top_k_chunk_ids = [int(chunk_id) for chunk_id, _ in reranked_results[:top_k]]
         
         logger.info(f"Hybrid search returned {len(top_k_chunk_ids)} chunks.")
         return top_k_chunk_ids
+
+    # The original hybrid_search is now query_similar_chunks.
+    # We keep the original name as an alias for backward compatibility if needed,
+    # but the task is to use query_similar_chunks.
+    hybrid_search = query_similar_chunks
+
+    def fetch_vectors(self, indices: List[int]) -> np.ndarray:
+        """
+        Fetches full embedding vectors from PostgreSQL for a list of chunk IDs.
+        
+        This function is for external use (e.g., testing or other modules) and 
+        returns a single numpy array of vectors.
+        
+        Args:
+            indices: List of chunk IDs (as integers) to fetch.
+            
+        Returns:
+            np.ndarray: A numpy array of vectors.
+        """
+        if not indices:
+            return np.array([])
+            
+        # The internal LSHRS fetcher returns a list of (id, vector) tuples
+        # We convert the integer indices to strings for the internal function
+        lshrs_results = self._fetch_vectors_for_lshrs([str(i) for i in indices])
+        
+        # Extract just the vectors and convert to a single numpy array
+        vectors = [vector for _, vector in lshrs_results]
+        
+        if not vectors:
+            return np.array([])
+            
+        return np.stack(vectors)
 
 # Global instance for easy access
 lsh_indexer: Optional[LSHIndexer] = None

@@ -214,7 +214,7 @@ def insert_document(
 
 def insert_chunks(
     document_id: int, chunks: List[str], embeddings: List[List[float]]
-) -> None:
+) -> List[int]:
     """
     Batch inserts chunks with their embeddings into the database.
 
@@ -222,6 +222,9 @@ def insert_chunks(
         document_id: ID of the parent document
         chunks: List of text chunks
         embeddings: List of embedding vectors (same length as chunks)
+
+    Returns:
+        List[int]: List of chunk IDs that were inserted.
 
     Raises:
         ValueError: If chunks and embeddings lists have different lengths
@@ -239,6 +242,7 @@ def insert_chunks(
 
     logger.info(f"Inserting {len(chunks)} chunks for document_id: {document_id}")
 
+    inserted_chunk_ids = []
     try:
         with engine.connect() as conn:
             # Batch insert all chunks in a single transaction
@@ -250,16 +254,20 @@ def insert_chunks(
                 query = f"""
                     INSERT INTO document_chunks (document_id, chunk_index, content, embedding)
                     VALUES (:document_id, :chunk_index, :content, '{embedding_str}'::vector)
+                    RETURNING id
                 """
 
-                conn.execute(
+                result = conn.execute(
                     text(query),
                     {"document_id": document_id, "chunk_index": idx, "content": chunk},
                 )
+                # Fetchone returns a tuple, we need the first element (the ID)
+                inserted_chunk_ids.append(result.fetchone()[0])
 
             conn.commit()
 
         logger.info(f"Successfully inserted {len(chunks)} chunks")
+        return inserted_chunk_ids
 
     except Exception as e:
         logger.error(

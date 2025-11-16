@@ -6,6 +6,7 @@ Handles semantic search and context assembly for question answering.
 
 import logging
 from typing import List
+import numpy as np
 from backend.embeddings import embed_query
 from backend.db import search_similar_chunks
 from backend.config import TOP_K_RETRIEVAL, USE_LSH_SEARCH
@@ -14,6 +15,7 @@ from backend.db import get_chunk_content_by_ids
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
 def lsh_hybrid_search(
     question: str, session_id: str, top_k: int
 ) -> List[str]:
@@ -35,12 +37,14 @@ def lsh_hybrid_search(
     
     try:
         # 1. Generate embedding for the question
-        query_embedding = embed_query(question)
+        # embed_query now returns List[float], convert to np.ndarray for LSHRS
+        query_embedding_list = embed_query(question)
+        query_embedding = np.array(query_embedding_list)
         
         # 2. Perform hybrid search
         indexer = get_lsh_indexer()
-        # The hybrid_search method returns a list of chunk IDs (integers)
-        chunk_ids = indexer.hybrid_search(query_embedding, top_k=top_k)
+        # The query_similar_chunks method returns a list of chunk IDs (integers)
+        chunk_ids = indexer.query_similar_chunks(query_embedding, top_k=top_k)
         
         if not chunk_ids:
             logger.info("LSH hybrid search returned no chunk IDs.")
@@ -59,8 +63,6 @@ def lsh_hybrid_search(
         )
         # Fallback to pgvector search is handled in get_context_chunks
         raise
-
-
 
 
 def get_context_chunks(
@@ -95,10 +97,27 @@ def get_context_chunks(
     )
 
     try:
+        chunks = []
         if USE_LSH_SEARCH:
-            logger.info("Using LSH hybrid search.")
-            # The LSH search handles embedding generation internally
-            chunks = lsh_hybrid_search(question, session_id, top_k)
+            logger.info("Attempting LSH hybrid search.")
+            try:
+                # The LSH search handles embedding generation internally
+                chunks = lsh_hybrid_search(question, session_id, top_k)
+            except Exception as e:
+                # If LSH fails, log and fall back to pgvector search
+                logger.error(
+                    f"LSH search failed, falling back to pgvector search: {str(e)}",
+                    exc_info=True,
+                )
+                logger.info("Using pgvector direct search as fallback.")
+                # Fallback: Generate embedding for the question
+                query_embedding = embed_query(question)
+                logger.debug(
+                    f"Generated query embedding with dimension: {len(query_embedding)}"
+                )
+
+                # Search for similar chunks
+                chunks = search_similar_chunks(query_embedding, session_id, top_k)
         else:
             logger.info("Using pgvector direct search.")
             # Generate embedding for the question

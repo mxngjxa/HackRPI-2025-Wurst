@@ -25,6 +25,12 @@ GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 # Optional Environment Variables with Defaults
 GEMINI_CHAT_MODEL: str = os.getenv("GEMINI_CHAT_MODEL", "gemini-1.5-flash")
 GEMINI_EMBEDDING_MODEL: str = os.getenv("GEMINI_EMBEDDING_MODEL", "embedding-001")
+
+# Local Embedding Configuration
+LOCAL_EMBEDDING_MODEL_NAME: str = os.getenv("LOCAL_EMBEDDING_MODEL_NAME", "jinaai/jina-embeddings-v2-base-en")
+USE_LOCAL_EMBEDDINGS: bool = os.getenv("USE_LOCAL_EMBEDDINGS", "false").lower() in ("true", "yes", "1")
+ALLOW_EMBEDDING_FALLBACK: bool = os.getenv("ALLOW_EMBEDDING_FALLBACK", "false").lower() in ("true", "yes", "1")
+
 EMBEDDING_DIMENSION: int = int(os.getenv("EMBEDDING_DIMENSION", "768"))
 
 # Parse USE_MOCK_LLM flag (accepts: true/false, yes/no, 1/0)
