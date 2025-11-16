@@ -1,0 +1,7 @@
+This is a test document for the LLM File-Based Chatbot preload functionality.
+
+The preload script should be able to read this file, chunk it, generate embeddings, and store it in the database as a preloaded document that is available to all sessions.
+
+This document contains multiple paragraphs to ensure proper chunking behavior. The chunking module will split this text into overlapping segments based on the configured chunk size and overlap parameters.
+
+Preloaded documents are marked with is_preloaded=True and session_id=NULL in the database, which distinguishes them from session-specific documents uploaded by users.

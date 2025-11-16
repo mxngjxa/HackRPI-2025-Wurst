@@ -1,0 +1,192 @@
+# Implementation Plan
+
+- [x] 1. Set up project structure and dependencies
+  - Create project directory structure with backend/, scripts/, and preload_docs/ folders
+  - Create requirements.txt with all necessary dependencies
+  - Create .env.example file with all required environment variables
+  - Create README.md with setup instructions
+  - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7_
+
+- [x] 2. Implement configuration module
+  - [x] 2.1 Create backend/config.py with environment variable loading
+    - Implement loading of DATABASE_URL, GEMINI_API_KEY, and model names
+    - Add default values for optional parameters (chunk size, overlap, top-k)
+    - Implement USE_MOCK_LLM flag parsing
+    - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6_
+  - [x] 2.2 Add configuration validation function
+    - Validate required environment variables are present
+    - Raise clear exceptions with helpful messages for missing config
+    - _Requirements: 10.7_
+
+- [x] 3. Set up database layer
+  - [x] 3.1 Create database schema initialization
+    - Write SQL schema for documents and document_chunks tables
+    - Add pgvector extension creation
+    - Implement CASCADE DELETE constraint
+    - Add unique constraint for preloaded documents
+    - _Requirements: 7.1, 7.4, 7.5, 2.5, 2.6_
+  - [x] 3.2 Create database indexes
+    - Create IVFFlat index on embedding column for vector search
+    - Create btree index on session_id column
+    - _Requirements: 7.2, 7.3_
+  - [x] 3.3 Implement backend/db.py with connection management
+    - Create SQLAlchemy engine with connection pooling
+    - Implement init_db() function to create schema
+    - _Requirements: 7.6_
+  - [x] 3.4 Implement database CRUD operations
+    - Write insert_document() function
+    - Write insert_chunks() with batch insert support
+    - Write search_similar_chunks() using pgvector cosine distance
+    - Write clear_session_documents() function
+    - Write document_exists() function for duplicate checking
+    - _Requirements: 2.4, 2.5, 2.6, 4.2, 4.3, 6.3, 6.6, 3.5_
+
+- [x] 4. Implement file processing modules
+  - [x] 4.1 Create backend/file_parser.py
+    - Implement FileValidationError custom exception
+    - Write validate_file() to check file size and format
+    - Write read_txt_file() with UTF-8 decoding and error handling
+    - Add validation for empty or whitespace-only files
+    - _Requirements: 1.1, 1.3, 1.4, 1.5, 8.1, 8.4_
+  - [x] 4.2 Create backend/chunking.py
+    - Implement chunk_text() function with configurable size and overlap
+    - Handle edge cases (empty text, text smaller than chunk size)
+    - _Requirements: 2.1_
+
+- [x] 5. Implement embeddings module
+  - [x] 5.1 Create backend/embeddings.py with Gemini integration
+    - Configure google-generativeai SDK with API key
+    - Implement embed_texts() with batch processing
+    - Implement embed_query() for single text embedding
+    - Add error handling for API failures with logging
+    - _Requirements: 2.2, 2.3, 4.1, 8.2, 8.5_
+
+- [x] 6. Implement retrieval module
+  - [x] 6.1 Create backend/retrieval.py
+    - Implement get_context_chunks() to retrieve relevant chunks
+    - Implement format_context() to concatenate chunks with delimiters
+    - Handle case when no documents are available
+    - _Requirements: 4.1, 4.2, 4.3, 4.4_
+
+- [x] 7. Implement LLM client abstraction
+  - [x] 7.1 Create backend/llm_client.py with base class
+    - Define LLMClient abstract base class with generate_answer() method
+    - _Requirements: 5.1, 5.4_
+  - [x] 7.2 Implement MockLLMClient
+    - Create mock response with question and context preview
+    - _Requirements: 5.2_
+  - [x] 7.3 Implement GeminiLLMClient
+    - Create prompt template for RAG pattern
+    - Implement Gemini API call using generate_content()
+    - Add error handling with fallback messages
+    - _Requirements: 5.3, 8.5_
+  - [x] 7.4 Implement factory function
+    - Create get_llm_client() to return appropriate client based on config
+    - _Requirements: 5.1, 5.4, 5.5_
+
+- [x] 8. Implement chat service orchestration
+  - [x] 8.1 Create backend/chat_service.py
+    - Implement generate_session_id() using UUID4
+    - _Requirements: 6.1_
+  - [x] 8.2 Implement file upload handler
+    - Write handle_upload() to process up to 5 files
+    - Integrate file_parser, chunking, embeddings, and db modules
+    - Collect and return errors for failed files
+    - _Requirements: 1.1, 1.2, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
+  - [x] 8.3 Implement question answering handler
+    - Write handle_question() to orchestrate retrieval and LLM
+    - Pass context and question to LLM client
+    - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
+  - [x] 8.4 Implement session clear handler
+    - Write handle_clear_session() to delete session documents
+    - _Requirements: 6.3, 6.4, 6.6_
+
+- [x] 9. Implement Gradio frontend
+  - [x] 9.1 Create app.py with Gradio UI components
+    - Set up Gradio Blocks layout
+    - Add file upload component with .txt filter and multiple file support
+    - Add chatbot display component
+    - Add text input for questions
+    - Add three buttons: Upload files, Send, Clear session
+    - _Requirements: 9.1, 9.2, 9.3, 9.4_
+  - [x] 9.2 Implement session state management
+    - Create gr.State for session_id
+    - Create gr.State for chat history
+    - Implement on_load() to initialize session
+    - _Requirements: 6.1, 6.2_
+  - [x] 9.3 Implement event handlers
+    - Write on_upload() to handle file uploads and update UI
+    - Write on_send() to handle question submission
+    - Write on_clear() to handle session clearing
+    - Clear file input after successful upload
+    - Clear text input after sending message
+    - _Requirements: 1.6, 4.6, 6.3, 6.4, 6.5, 9.6, 9.7_
+  - [x] 9.4 Add error handling and user feedback
+    - Display system messages distinctly from chat messages
+    - Show loading indicators during processing
+    - Display user-friendly error messages
+    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 9.5, 9.8_
+
+- [x] 10. Implement preload script
+  - [x] 10.1 Create scripts/preload_data.py
+    - Implement preload_documents() to load .txt files from preload_docs/
+    - Check for existing documents to avoid duplicates
+    - Process files using same pipeline as user uploads
+    - Mark documents as preloaded with null session_id
+    - Add progress logging
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+
+- [x] 11. Add logging and error handling infrastructure
+  - [x] 11.1 Set up Python logging configuration
+    - Configure logging format with timestamp, level, module, session_id
+    - Set appropriate log levels for different modules
+    - Add file handler for persistent logs
+  - [x] 11.2 Add comprehensive error handling
+    - Implement try-catch blocks in all service functions
+    - Log errors with technical details
+    - Return user-friendly error messages
+    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
+
+- [x] 12. Create documentation and setup files
+  - [x] 12.1 Write README.md
+    - Add project overview and features
+    - Document prerequisites (PostgreSQL, Python, pgvector)
+    - Provide step-by-step setup instructions
+    - Document environment variables
+    - Add usage examples
+  - [x] 12.2 Create .env.example
+    - List all required and optional environment variables
+    - Provide example values and descriptions
+  - [x] 12.3 Add inline code documentation
+    - Add docstrings to all functions and classes
+    - Document parameters, return values, and exceptions
+
+- [ ] 13. Integration and end-to-end testing
+  - [ ] 13.1 Test database initialization
+    - Verify schema creation
+    - Verify indexes are created
+    - Test connection pooling
+  - [ ] 13.2 Test file upload flow
+    - Upload single file and verify database storage
+    - Upload multiple files and verify all are processed
+    - Test file validation (size, format, empty files)
+    - Test 5-file limit enforcement
+  - [ ] 13.3 Test question answering flow
+    - Ask questions with uploaded documents
+    - Verify context retrieval includes both preloaded and session docs
+    - Test with Mock LLM mode
+    - Test with no documents uploaded
+  - [ ] 13.4 Test session management
+    - Verify session isolation between different sessions
+    - Test clear session functionality
+    - Verify preloaded documents persist after clear
+  - [ ] 13.5 Test preload script
+    - Run preload script with sample documents
+    - Verify documents are marked as preloaded
+    - Test duplicate prevention
+    - Verify preloaded docs accessible in all sessions
+  - [ ] 13.6 Test error scenarios
+    - Test with invalid database connection
+    - Test with invalid Gemini API key (if using real mode)
+    - Test file upload errors
+    - Verify user-friendly error messages displayed
