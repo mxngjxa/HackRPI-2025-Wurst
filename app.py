@@ -1,14 +1,12 @@
 """
 LLM File-Based Chatbot - Gradio Frontend
-
-Main application entry point providing a web interface for document upload
-and question answering using RAG (Retrieval-Augmented Generation).
 """
 
 import logging
 import os
 import gradio as gr
 from typing import List, Tuple, Optional, Any
+from datetime import datetime  # <-- add this
 
 from backend.logging_config import setup_logging
 from backend.chat_service import (
@@ -18,15 +16,32 @@ from backend.chat_service import (
     handle_clear_session,
 )
 from backend.config import MAX_FILES_PER_SESSION
+from backend.db import init_db
 
-# Configure logging with centralized setup
+# ---- logging configuration ----
+
+# Generate a per-run timestamp
+run_ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+# Base log filename from env, or default
+base_log_file = os.getenv("LOG_FILE", "app.log")
+
+# If you want to allow disabling file logging via empty LOG_FILE, keep this:
+if base_log_file:
+    # Insert timestamp before extension, e.g. app_2025-11-16_13-40-57.log
+    root, ext = os.path.splitext(base_log_file)
+    log_file = f"{root}_{run_ts}{ext or '.log'}"
+else:
+    log_file = None  # disables file logging
+
 # Use environment variable for log level, default to INFO
 log_level = os.getenv("LOG_LEVEL", "INFO")
-log_file = os.getenv(
-    "LOG_FILE", "app.log"
-)  # Set to empty string to disable file logging
+
+# Call centralized setup
 setup_logging(
-    log_level=log_level, log_file=log_file if log_file else None, log_dir="logs"
+    log_level=log_level,
+    log_file=log_file,   # now unique per run
+    log_dir="logs",
 )
 
 logger = logging.getLogger(__name__)
@@ -289,5 +304,15 @@ with gr.Blocks(title="LLM File-Based Chatbot") as app:
 
 if __name__ == "__main__":
     logger.info("Starting LLM File-Based Chatbot application")
+    
+    # Initialize database schema (create tables, extensions)
+    try:
+        init_db()
+        logger.info("Database schema initialized successfully on startup.")
+    except Exception as e:
+        logger.error(f"FATAL: Failed to initialize database schema: {str(e)}")
+        # Exit if database initialization fails
+        exit(1)
+
     # Let Gradio find an available port automatically
     app.launch(server_name="127.0.0.1", share=False)

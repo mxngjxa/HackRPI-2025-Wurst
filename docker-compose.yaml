@@ -9,12 +9,12 @@ services:
     restart: always
 
   db:
-    image: postgres
+    image: pgvector/pgvector:pg17  # Changed from postgres to pgvector image
     restart: always
     shm_size: 128mb
     environment:
       POSTGRES_PASSWORD: changeme
-      POSTGRES_DB: rag_demo
+      POSTGRES_DB: demo
     ports:
       - "5432:5432"
 
