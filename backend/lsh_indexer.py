@@ -207,28 +207,48 @@ class LSHIndexer:
         # We use get_above_p to get all candidates above the similarity threshold,
         # which is a more robust approach than a fixed top-k for reranking.
         
-        # The LSHRS get_top_k (line 197) performs the hybrid search (LSH + full vector reranking)
-        # because vector_fetch_fn is provided. We now filter the results by the
-        # similarity threshold and then take the top_k.
+        # Check if LSHRS returned only IDs (list of ints) or (id, sim) tuples (list of tuples)
+        # The log shows a list of integers, so we check for that.
+        if candidates_with_sim and isinstance(candidates_with_sim[0], int):
+            logger.warning("LSHRS.get_top_k returned only IDs. Performing manual reranking.")
+            candidate_ids = [str(c) for c in candidates_with_sim]
+            
+            # Phase 2: Fetch full vectors for manual reranking
+            reranking_candidates = self._fetch_vectors_for_lshrs(candidate_ids)
+            
+            # Phase 3: Manually Rerank with cosine similarity
+            reranked_results = []
+            # Calculate the norm of the query embedding once
+            query_norm = np.linalg.norm(query_embedding)
+            
+            for chunk_id_str, vector in reranking_candidates:
+                # Cosine similarity: dot product / (norm_query * norm_vector)
+                vector_norm = np.linalg.norm(vector)
+                if query_norm == 0 or vector_norm == 0:
+                    similarity = 0.0
+                else:
+                    similarity = np.dot(query_embedding, vector) / (query_norm * vector_norm)
+                
+                reranked_results.append((chunk_id_str, similarity))
         
-        # Filter by similarity threshold
-        # Add defensive check for LSHRS return format
-        if not isinstance(candidates_with_sim, list) or not all(isinstance(item, tuple) and len(item) == 2 for item in candidates_with_sim):
+        elif candidates_with_sim and isinstance(candidates_with_sim[0], tuple) and len(candidates_with_sim[0]) == 2:
+            # LSHRS returned the expected (id, sim) tuples (hybrid search worked)
+            reranked_results = candidates_with_sim
+        else:
             logger.error(f"LSHRS.get_top_k returned unexpected format: {candidates_with_sim}")
             return []
             
+        # Filter by similarity threshold
         filtered_results = [
-            (chunk_id, sim) for chunk_id, sim in candidates_with_sim
+            (chunk_id, sim) for chunk_id, sim in reranked_results
             if sim >= self.similarity_threshold
         ]
         
-        # The results from get_top_k are already sorted, but we re-sort after filtering
-        # to be safe, and to align with the original logic's intent.
+        # Sort by similarity (descending) and take top_k
         filtered_results.sort(key=lambda x: x[1], reverse=True)
-        reranked_results = filtered_results
         
         # Phase 4: Return top_k results
-        top_k_chunk_ids = [int(chunk_id) for chunk_id, _ in reranked_results[:top_k]]
+        top_k_chunk_ids = [int(chunk_id) for chunk_id, _ in filtered_results[:top_k]]
         
         end_time = time.time()
         logger.info(f"Hybrid search returned {len(top_k_chunk_ids)} chunks. Query time: {end_time - start_time:.4f}s")
