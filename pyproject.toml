@@ -18,7 +18,9 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "fastparquet>=2024.11.0",
     "pandas>=2.3.3",
+    "pyarrow>=22.0.0",
     "pytest>=9.0.1",
     "ruff>=0.14.5",
     "ty>=0.0.1a26",
