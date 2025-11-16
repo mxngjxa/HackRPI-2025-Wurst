@@ -8,10 +8,59 @@ import logging
 from typing import List
 from backend.embeddings import embed_query
 from backend.db import search_similar_chunks
-from backend.config import TOP_K_RETRIEVAL
+from backend.config import TOP_K_RETRIEVAL, USE_LSH_SEARCH
+from backend.lsh_indexer import get_lsh_indexer
+from backend.db import get_chunk_content_by_ids
 
 # Configure logging
 logger = logging.getLogger(__name__)
+def lsh_hybrid_search(
+    question: str, session_id: str, top_k: int
+) -> List[str]:
+    """
+    Performs a hybrid search using LSH for candidate retrieval and PostgreSQL 
+    for cosine similarity reranking.
+
+    Args:
+        question: User's question text
+        session_id: Current session identifier (not used in LSH search but kept for signature consistency)
+        top_k: Number of top results to retrieve
+
+    Returns:
+        List[str]: List of relevant chunk content strings, ordered by similarity.
+    """
+    logger.info(
+        f"LSH Hybrid Search for question: {question[:50]}... (top_k: {top_k})"
+    )
+    
+    try:
+        # 1. Generate embedding for the question
+        query_embedding = embed_query(question)
+        
+        # 2. Perform hybrid search
+        indexer = get_lsh_indexer()
+        # The hybrid_search method returns a list of chunk IDs (integers)
+        chunk_ids = indexer.hybrid_search(query_embedding, top_k=top_k)
+        
+        if not chunk_ids:
+            logger.info("LSH hybrid search returned no chunk IDs.")
+            return []
+            
+        # 3. Fetch chunk content from PostgreSQL
+        chunks = get_chunk_content_by_ids(chunk_ids)
+        
+        logger.info(f"LSH hybrid search retrieved {len(chunks)} chunks.")
+        return chunks
+        
+    except Exception as e:
+        logger.error(
+            f"LSH Hybrid Search failed for session {session_id}: {str(e)}",
+            exc_info=True,
+        )
+        # Fallback to pgvector search is handled in get_context_chunks
+        raise
+
+
 
 
 def get_context_chunks(
@@ -46,14 +95,20 @@ def get_context_chunks(
     )
 
     try:
-        # Generate embedding for the question
-        query_embedding = embed_query(question)
-        logger.debug(
-            f"Generated query embedding with dimension: {len(query_embedding)}"
-        )
+        if USE_LSH_SEARCH:
+            logger.info("Using LSH hybrid search.")
+            # The LSH search handles embedding generation internally
+            chunks = lsh_hybrid_search(question, session_id, top_k)
+        else:
+            logger.info("Using pgvector direct search.")
+            # Generate embedding for the question
+            query_embedding = embed_query(question)
+            logger.debug(
+                f"Generated query embedding with dimension: {len(query_embedding)}"
+            )
 
-        # Search for similar chunks
-        chunks = search_similar_chunks(query_embedding, session_id, top_k)
+            # Search for similar chunks
+            chunks = search_similar_chunks(query_embedding, session_id, top_k)
 
         if not chunks:
             logger.info("No relevant chunks found - no documents available")

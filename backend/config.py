@@ -38,6 +38,18 @@ CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "200"))
 # Retrieval parameters
 TOP_K_RETRIEVAL: int = int(os.getenv("TOP_K_RETRIEVAL", "5"))
 
+# LSH Configuration
+USE_LSH_SEARCH: bool = os.getenv("USE_LSH_SEARCH", "false").lower() in (
+    "true",
+    "yes",
+    "1",
+)
+REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
+LSH_NUM_PERM: int = int(os.getenv("LSH_NUM_PERM", "256"))
+LSH_SIMILARITY_THRESHOLD: float = float(os.getenv("LSH_SIMILARITY_THRESHOLD", "0.7"))
+LSH_REDIS_PREFIX: str = os.getenv("LSH_REDIS_PREFIX", "lsh:demo")
+
 # File upload limits
 MAX_FILE_SIZE_MB: int = int(os.getenv("MAX_FILE_SIZE_MB", "10"))
 MAX_FILES_PER_SESSION: int = int(os.getenv("MAX_FILES_PER_SESSION", "5"))
@@ -112,6 +124,15 @@ def validate_config() -> None:
     if EMBEDDING_DIMENSION <= 0:
         errors.append(
             f"EMBEDDING_DIMENSION must be positive, got: {EMBEDDING_DIMENSION}"
+        )
+
+    # Validate LSH parameters
+    if LSH_NUM_PERM <= 0:
+        errors.append(f"LSH_NUM_PERM must be positive, got: {LSH_NUM_PERM}")
+    
+    if not 0.0 <= LSH_SIMILARITY_THRESHOLD <= 1.0:
+        errors.append(
+            f"LSH_SIMILARITY_THRESHOLD must be between 0.0 and 1.0, got: {LSH_SIMILARITY_THRESHOLD}"
         )
 
     # Validate Function Calling parameters

@@ -6,7 +6,7 @@ and CRUD operations for documents and chunks.
 """
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from sqlalchemy import create_engine, text, Engine
 from sqlalchemy.pool import QueuePool
 from backend.config import DATABASE_URL, EMBEDDING_DIMENSION
@@ -115,6 +115,18 @@ def init_db() -> None:
                     embedding VECTOR({EMBEDDING_DIMENSION}) NOT NULL,
                     CONSTRAINT unique_chunk_per_document UNIQUE (document_id, chunk_index)
                 )
+            """)
+            )
+
+            # Add LSH metadata columns (idempotent ALTER TABLE)
+            logger.info("Adding LSH metadata columns")
+            conn.execute(
+                text("""
+                ALTER TABLE documents ADD COLUMN IF NOT EXISTS
+                    lsh_indexed BOOLEAN DEFAULT FALSE;
+                
+                ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS
+                    lsh_signature TEXT;
             """)
             )
 
@@ -343,6 +355,7 @@ def clear_session_documents(session_id: str) -> int:
             )
 
             deleted_count = len(result.fetchall())
+
             conn.commit()
 
         logger.info(f"Deleted {deleted_count} documents for session: {session_id}")
@@ -353,6 +366,150 @@ def clear_session_documents(session_id: str) -> int:
             f"Database error clearing session {session_id}: {str(e)}", exc_info=True
         )
         raise Exception(f"Failed to clear session documents: {str(e)}") from e
+
+
+def get_unindexed_chunks(session_id: Optional[str] = None) -> List[Tuple[int, int, List[float]]]:
+    """
+    Retrieves chunk data (id, document_id, embedding) for documents that have not
+    yet been indexed by LSH.
+
+    Args:
+        session_id: If provided, only retrieves chunks for that session.
+
+    Returns:
+        List[Tuple[int, int, List[float]]]: List of (chunk_id, document_id, embedding) tuples.
+    """
+    engine = get_engine()
+    
+    logger.info(f"Retrieving unindexed chunks for session: {session_id}")
+
+    try:
+        with engine.connect() as conn:
+            # Base query for unindexed documents
+            query = """
+                SELECT
+                    dc.id,
+                    dc.document_id,
+                    dc.embedding
+                FROM document_chunks dc
+                JOIN documents d ON dc.document_id = d.id
+                WHERE d.lsh_indexed = FALSE
+            """
+            params = {}
+            
+            if session_id:
+                query += " AND d.session_id = :session_id"
+                params["session_id"] = session_id
+            
+            # Order by document_id to process documents sequentially
+            query += " ORDER BY dc.document_id, dc.chunk_index"
+
+            result = conn.execute(text(query), params)
+            
+            chunks = []
+            for chunk_id, document_id, embedding_str in result.fetchall():
+                # Convert the PostgreSQL vector string representation to a list of floats
+                # e.g., "[1.23, 4.56, ...]" -> [1.23, 4.56, ...]
+                embedding = [float(x) for x in embedding_str.strip("[]").split(",")]
+                chunks.append((chunk_id, document_id, embedding))
+
+        logger.info(f"Found {len(chunks)} unindexed chunks.")
+        return chunks
+
+    except Exception as e:
+        logger.error(
+            f"Database error retrieving unindexed chunks: {str(e)}", exc_info=True
+        )
+        raise Exception(f"Failed to retrieve unindexed chunks: {str(e)}") from e
+
+
+def mark_document_as_indexed(document_id: int) -> None:
+    """
+    Marks a document as having been indexed by LSH.
+
+    Args:
+        document_id: ID of the document to mark.
+
+    Raises:
+        Exception: If database operation fails.
+    """
+    engine = get_engine()
+    
+    logger.info(f"Marking document_id {document_id} as LSH indexed.")
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text("""
+                    UPDATE documents
+                    SET lsh_indexed = TRUE
+                    WHERE id = :document_id
+                """),
+                {"document_id": document_id},
+            )
+            conn.commit()
+
+        logger.debug(f"Document {document_id} marked as LSH indexed successfully.")
+
+    except Exception as e:
+        logger.error(
+            f"Database error marking document {document_id} as indexed: {str(e)}",
+            exc_info=True,
+        )
+        raise Exception(f"Failed to mark document as indexed: {str(e)}") from e
+
+
+def get_chunk_content_by_ids(chunk_ids: List[int]) -> List[str]:
+    """
+    Retrieves the content of document chunks for a given list of chunk IDs.
+
+    Args:
+        chunk_ids: List of chunk IDs (integers) to fetch.
+
+    Returns:
+        List[str]: List of chunk content strings, ordered by the input chunk_ids.
+    """
+    if not chunk_ids:
+        return []
+
+    engine = get_engine()
+    
+    logger.info(f"Retrieving content for {len(chunk_ids)} chunks.")
+
+    try:
+        with engine.connect() as conn:
+            # Use ANY to query for multiple IDs
+            # We use a CASE statement to ensure the results are returned in the order of the input list
+            # This is important for maintaining the order from the LSH reranking.
+            # NOTE: The ORDER BY CASE is constructed dynamically to match the input order.
+            order_by_case = ' '.join([f'WHEN {id} THEN {i}' for i, id in enumerate(chunk_ids)])
+            
+            query = f"""
+                SELECT id, content
+                FROM document_chunks
+                WHERE id = ANY(:chunk_ids)
+                ORDER BY CASE id {order_by_case} END
+            """
+            
+            result = conn.execute(
+                text(query),
+                {"chunk_ids": chunk_ids}
+            )
+            
+            # The ORDER BY CASE ensures the results are in the correct order,
+            # The ORDER BY CASE ensures the results are in the correct order,
+            # so we can just extract the content.
+            chunks = [row[1] for row in result.fetchall()]
+
+        logger.debug(f"Successfully retrieved content for {len(chunks)} chunks.")
+        return chunks
+
+    except Exception as e:
+        logger.error(
+            f"Database error retrieving chunk content by IDs: {str(e)}", exc_info=True
+        )
+        # Return empty list to allow the retrieval pipeline to continue
+        return []
 
 
 def document_exists(filename: str, is_preloaded: bool) -> bool:
