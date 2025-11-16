@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Console RAG Terminal</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Bungee+Hairline&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app-container">
+        <header>
+            <h1 class="retro-title">
+                <span class="neon-text-cyan">TIME</span> 
+                <span class="neon-text-magenta">CONSOLE</span>
+            </h1>
+            <p class="subtitle">RAG Terminal // Back to the Future Edition</p>
+        </header>
+
+        <div id="main-layout">
+            <!-- Documents Bay -->
+            <div id="documents-bay" class="panel retro-border">
+                <h2 class="panel-title">DOCUMENTS BAY <span id="file-count">(0/5)</span></h2>
+                <div id="upload-area" class="upload-area">
+                    <input type="file" id="file-input" multiple accept=".txt" style="display: none;">
+                    <label for="file-input" class="upload-label">
+                        <span class="upload-icon">💾</span>
+                        <p>DRAG & DROP .TXT FILES HERE</p>
+                        <p>OR CLICK TO SELECT</p>
+                    </label>
+                </div>
+                <div id="file-list" class="file-list">
+                    <!-- File status items will be inserted here -->
+                </div>
+                <button id="upload-btn" class="retro-button primary-btn" disabled>UPLOAD DOCUMENTS</button>
+            </div>
+
+            <!-- RAG Terminal / Chat Area -->
+            <div id="rag-terminal" class="panel retro-border">
+                <div id="chat-history" class="chat-history crt-effect">
+                    <!-- Chat messages will be inserted here -->
+                    <div class="system-message">
+                        <span class="neon-text-cyan">[SYSTEM]</span> Initializing Time Console...
+                    </div>
+                    <div class="system-message">
+                        <span class="neon-text-cyan">[SYSTEM]</span> Generating new session ID...
+                    </div>
+                </div>
+                
+                <div id="input-bar">
+                    <input type="text" id="question-input" placeholder="ASK THE CONSOLE..." class="retro-input" disabled>
+                    <button id="send-btn" class="retro-button primary-btn" disabled>SEND</button>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <button id="clear-session-btn" class="retro-button stop-btn">REBOOT SESSION</button>
+            <div id="session-info" class="session-info">
+                <span class="neon-text-magenta">SESSION ID:</span> <span id="session-id">...</span>
+            </div>
+        </footer>
+    </div>
+
+    <div id="error-toast-container">
+        <!-- Error toasts will appear here -->
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

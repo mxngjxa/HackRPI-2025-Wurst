@@ -3,7 +3,7 @@ import numpy as np
 import psycopg2
 from psycopg2.extras import execute_values
 from pgvector.psycopg2 import register_vector
-import ast
+# import ast
 
 def insert_with_psycopg2(df, connection_string):
     conn = psycopg2.connect(connection_string)
