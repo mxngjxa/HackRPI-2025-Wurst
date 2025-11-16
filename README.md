@@ -53,6 +53,14 @@ uv sync
 uv run scripts/parquet_to_postgres.py && uv run scripts/build_lsh_index.py
 ```
 
+which should return 
+```bash
+INFO:backend.lsh_indexer:LSH indexing complete. Total chunks indexed: 64078
+INFO:__main__:--- LSH Index Build Complete ---
+INFO:__main__:Total chunks indexed: 64078
+INFO:__main__:Time taken: 74.84 seconds
+```
+
 ```bash
 uv run main.py
 ```

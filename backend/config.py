@@ -23,6 +23,11 @@ DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
 # Optional Environment Variables with Defaults
+# Database Schema Overrides
+DOCUMENT_CHUNKS_TABLE: str = os.getenv("DOCUMENT_CHUNKS_TABLE", "document_chunks")
+EMBEDDING_COLUMN: str = os.getenv("EMBEDDING_COLUMN", "embeddings") # Changed default to match demo table
+CHUNK_CONTENT_COLUMN: str = os.getenv("CHUNK_CONTENT_COLUMN", "text") # Added for demo table compatibility
+
 GEMINI_CHAT_MODEL: str = os.getenv("GEMINI_CHAT_MODEL", "gemini-1.5-flash")
 GEMINI_EMBEDDING_MODEL: str = os.getenv("GEMINI_EMBEDDING_MODEL", "embedding-001")
 

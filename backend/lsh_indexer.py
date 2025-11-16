@@ -12,6 +12,8 @@ from backend.config import (
     LSH_SIMILARITY_THRESHOLD,
     LSH_REDIS_PREFIX,
     EMBEDDING_DIMENSION,
+    DOCUMENT_CHUNKS_TABLE,
+    EMBEDDING_COLUMN,
 )
 from backend.db import get_engine, get_unindexed_chunks, mark_document_as_indexed
 
@@ -60,9 +62,9 @@ class LSHIndexer:
         try:
             with self.engine.connect() as conn:
                 # Use ANY to query for multiple IDs
-                query = """
-                    SELECT id, embedding
-                    FROM document_chunks
+                query = f"""
+                    SELECT id, {EMBEDDING_COLUMN}
+                    FROM {DOCUMENT_CHUNKS_TABLE}
                     WHERE id = ANY(:chunk_ids)
                 """
                 
@@ -120,8 +122,8 @@ class LSHIndexer:
         BATCH_SIZE = 1000 # As per requirements.md
         
         for document_id, chunks in chunks_by_document.items():
-            chunk_ids = [str(c) for c in chunks]
-            embeddings = [np.array(c) for c in chunks]
+            chunk_ids = [str(c[0]) for c in chunks]
+            embeddings = [np.array(c[1]) for c in chunks]
             
             # Process in batches
             for i in range(0, len(chunk_ids), BATCH_SIZE):
@@ -129,7 +131,7 @@ class LSHIndexer:
                 batch_embeddings = embeddings[i:i + BATCH_SIZE]
                 
                 # Add to LSH index (this handles signature generation and Redis storage)
-                self.lsh.add_vectors(batch_ids, batch_embeddings)
+                self.lsh.index(batch_ids, batch_embeddings)
                 indexed_count += len(batch_ids)
                 
                 logger.debug(f"Indexed batch of {len(batch_ids)} chunks for document {document_id}. Total indexed: {indexed_count}")
@@ -160,9 +162,9 @@ class LSHIndexer:
             logger.warning("index_new_chunks called with empty data.")
             return
 
-        if len(chunk_ids) != embeddings.shape:
+        if len(chunk_ids) != embeddings.shape[0]:
             raise ValueError(
-                f"ID count ({len(chunk_ids)}) must match embedding count ({embeddings.shape})"
+                f"ID count ({len(chunk_ids)}) must match embedding count ({embeddings.shape[0]})"
             )
 
         logger.info(f"Indexing {len(chunk_ids)} new chunks into LSH index.")
@@ -171,7 +173,7 @@ class LSHIndexer:
         str_chunk_ids = [str(cid) for cid in chunk_ids]
         
         # Add to LSH index (this handles signature generation and Redis storage)
-        self.lsh.add_vectors(str_chunk_ids, embeddings)
+        self.lsh.index(str_chunk_ids, embeddings)
         
         logger.debug(f"Successfully indexed {len(chunk_ids)} chunks.")
 
@@ -205,15 +207,25 @@ class LSHIndexer:
         # We use get_above_p to get all candidates above the similarity threshold,
         # which is a more robust approach than a fixed top-k for reranking.
         
-        # get_above_p returns a list of (chunk_id, similarity) tuples
-        reranked_results = self.lsh.get_above_p(
-            query_embedding, 
-            p=self.similarity_threshold, 
-            candidates=candidates_with_sim
-        )
+        # The LSHRS get_top_k (line 197) performs the hybrid search (LSH + full vector reranking)
+        # because vector_fetch_fn is provided. We now filter the results by the
+        # similarity threshold and then take the top_k.
         
-        # Sort by similarity (descending) and take top_k
-        reranked_results.sort(key=lambda x: x, reverse=True)
+        # Filter by similarity threshold
+        # Add defensive check for LSHRS return format
+        if not isinstance(candidates_with_sim, list) or not all(isinstance(item, tuple) and len(item) == 2 for item in candidates_with_sim):
+            logger.error(f"LSHRS.get_top_k returned unexpected format: {candidates_with_sim}")
+            return []
+            
+        filtered_results = [
+            (chunk_id, sim) for chunk_id, sim in candidates_with_sim
+            if sim >= self.similarity_threshold
+        ]
+        
+        # The results from get_top_k are already sorted, but we re-sort after filtering
+        # to be safe, and to align with the original logic's intent.
+        filtered_results.sort(key=lambda x: x[1], reverse=True)
+        reranked_results = filtered_results
         
         # Phase 4: Return top_k results
         top_k_chunk_ids = [int(chunk_id) for chunk_id, _ in reranked_results[:top_k]]
