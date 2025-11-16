@@ -33,10 +33,8 @@ function initSynthwaveEffects() {
         });
     }, 1000);
 
-    // Add typing effect to messages
-    document.addEventListener('DOMContentLoaded', () => {
-        typeWriterEffect('INITIALIZING NEURAL INTERFACE...', 'system');
-    });
++    // Add typing effect to messages once initialized
++    typeWriterEffect('INITIALIZING NEURAL INTERFACE...', 'system');
 
     // Add hover sound effects (visual feedback instead of actual sound)
     document.querySelectorAll('.neon-button, .send-button').forEach(button => {
@@ -50,10 +48,19 @@ function initSynthwaveEffects() {
 }
 
 // === UTILITY FUNCTIONS ===
+function escapeHtml(str) {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function showToast(message) {
     const toast = document.createElement('div');
     toast.className = 'error-toast';
-    toast.innerHTML = `<span>${message}</span>`;
+    toast.textContent = message;
     errorToastContainer.appendChild(toast);
 
     setTimeout(() => {
@@ -122,7 +129,8 @@ function renderMessage(type, content) {
         messageEl.setAttribute('data-text', prefix + content);
     }
 
-    const formattedContent = content.replace(/\n/g, '<br>');
+    const safeContent = escapeHtml(content);
+    const formattedContent = safeContent.replace(/\n/g, '<br>');
     messageEl.innerHTML = prefix + formattedContent;
     chatHistoryEl.appendChild(messageEl);
     scrollToBottom();
