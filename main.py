@@ -6,7 +6,7 @@ import logging
 import os
 import uvicorn
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware

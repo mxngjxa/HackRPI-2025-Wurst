@@ -35,31 +35,21 @@ This project is a file-based chatbot that uses a Large Language Model (LLM) to a
     ```bash
     docker run -p 8000:8000 -v ./.env:/app/.env llm-chatbot
     ```
-3.  **Access the API**: The FastAPI server will be running at `http://localhost:8000`.
-4.  **Access the Frontend**: Serve the `frontend/` directory (e.g., using a simple HTTP server) and open `frontend/index.html`.
+3.  **Access the Application**: The FastAPI server will be running at `http://localhost:8000`, which also serves the frontend.
 
 ## Local Development
 
 For local development, you will need to have a PostgreSQL database running on your machine. You can then install the dependencies with `uv` and run the backend API with `python main.py`. The frontend is a set of static files in the `frontend/` directory.
 
 ```bash
-uv pip install
+uv sync
 ```
 
 ### Running the Backend API
 
 ```bash
-python main.py
+uv run main.py
 ```
 
 The API will run on `http://127.0.0.1:8000`.
 
-### Running the Frontend
-
-The frontend is a set of static files. You can serve them using any simple HTTP server. For example, using Python's built-in server:
-
-```bash
-python -m http.server 8080 --directory frontend
-```
-
-Then, open your browser to `http://localhost:8080`.
