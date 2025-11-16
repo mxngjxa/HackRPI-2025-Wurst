@@ -7,8 +7,15 @@ requires-python = ">=3.13"
 dependencies = [
     "google-generativeai>=0.3.0",
     "gradio>=4.0.0",
+    "lshrs>=0.1.1a1",
     "pgvector>=0.2.0",
     "psycopg2-binary>=2.9.0",
     "python-dotenv>=1.0.0",
     "sqlalchemy>=2.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.5",
+    "ty>=0.0.1a26",
 ]
