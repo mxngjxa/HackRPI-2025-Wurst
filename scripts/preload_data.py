@@ -12,16 +12,18 @@ import sys
 import logging
 from pathlib import Path
 from typing import List, Tuple
+import numpy as np
 
 # Add parent directory to path to import backend modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from backend.logging_config import setup_logging
-from backend.config import CHUNK_SIZE, CHUNK_OVERLAP
+from backend.config import CHUNK_SIZE, CHUNK_OVERLAP, USE_LSH_SEARCH
 from backend.file_parser import FileValidationError
 from backend.chunking import chunk_text
 from backend.embeddings import embed_texts
 from backend.db import init_db, insert_document, insert_chunks, document_exists
+from backend.lsh_indexer import get_lsh_indexer
 
 # Configure logging with centralized setup
 log_level = os.getenv("LOG_LEVEL", "INFO")
@@ -50,6 +52,7 @@ def preload_documents(directory: str = "preload_docs") -> Tuple[int, int, List[s
     2. Chunk the text
     3. Generate embeddings
     4. Store in database with is_preloaded=True and session_id=NULL
+    5. Index in LSH if enabled
 
     Checks for existing documents to avoid duplicates. If a document
     with the same filename already exists as preloaded, it is skipped.
@@ -143,7 +146,22 @@ def preload_documents(directory: str = "preload_docs") -> Tuple[int, int, List[s
             )
 
             # Insert chunks with embeddings
-            insert_chunks(document_id, chunks, embeddings)
+            chunk_ids = insert_chunks(document_id, chunks, embeddings)
+
+            # Step 5: Index chunks in LSH if enabled
+            if USE_LSH_SEARCH:
+                try:
+                    indexer = get_lsh_indexer()
+                    # Convert embeddings (List[List[float]]) to numpy array for LSHRS
+                    embeddings_np = np.array(embeddings)
+                    indexer.index_new_chunks(chunk_ids, embeddings_np)
+                    logger.info(f"Indexed {len(chunk_ids)} chunks in LSH for document_id: {document_id}")
+                except Exception as e:
+                    logger.error(
+                        f"Failed to index chunks in LSH for document_id {document_id}: {str(e)}",
+                        exc_info=True,
+                    )
+                    # Continue processing even if LSH indexing fails
 
             logger.info(
                 f"✓ Successfully preloaded: {filename} "

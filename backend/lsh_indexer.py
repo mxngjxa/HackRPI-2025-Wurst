@@ -1,11 +1,11 @@
 import logging
 import numpy as np
 from typing import List, Tuple, Optional
+import time # Import time for query timing
 
 from lshrs import LSHRS
 from sqlalchemy import text
 from backend.config import (
-    DATABASE_URL,
     REDIS_HOST,
     REDIS_PORT,
     LSH_NUM_PERM,
@@ -138,6 +138,13 @@ class LSHIndexer:
             mark_document_as_indexed(document_id)
             logger.info(f"Document {document_id} marked as LSH indexed.")
 
+        # Log the final index size (approximate)
+        try:
+            index_size = self.lsh.get_index_size()
+            logger.info(f"LSH index size after indexing: {index_size} entries.")
+        except Exception as e:
+            logger.warning(f"Could not get LSH index size: {str(e)}")
+
         logger.info(f"LSH indexing complete. Total chunks indexed: {indexed_count}")
         return indexed_count
 
@@ -184,11 +191,14 @@ class LSHIndexer:
         # Phase 1: LSH candidate retrieval (top 50)
         # The LSHRS get_top_k returns a list of (chunk_id, similarity) tuples
         # where chunk_id is a string.
+        start_time = time.time()
         candidates_with_sim = self.lsh.get_top_k(query_embedding, topk=50)
         
         if not candidates_with_sim:
             logger.info("LSH candidate retrieval returned no results.")
             return []
+            
+        logger.debug(f"LSH candidate retrieval found {len(candidates_with_sim)} candidates.")
             
         # Phase 2 & 3: Fetch full vectors from PostgreSQL and Rerank with cosine similarity
         # LSHRS handles this internally via vector_fetch_fn and reranking logic.
@@ -208,7 +218,8 @@ class LSHIndexer:
         # Phase 4: Return top_k results
         top_k_chunk_ids = [int(chunk_id) for chunk_id, _ in reranked_results[:top_k]]
         
-        logger.info(f"Hybrid search returned {len(top_k_chunk_ids)} chunks.")
+        end_time = time.time()
+        logger.info(f"Hybrid search returned {len(top_k_chunk_ids)} chunks. Query time: {end_time - start_time:.4f}s")
         return top_k_chunk_ids
 
     # The original hybrid_search is now query_similar_chunks.

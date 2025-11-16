@@ -310,7 +310,9 @@ def search_similar_chunks(
                 SELECT dc.content
                 FROM document_chunks dc
                 JOIN documents d ON dc.document_id = d.id
-                WHERE d.is_preloaded = TRUE OR d.session_id = :session_id
+                WHERE d.is_preloaded = TRUE
+                OR d.session_id = :session_id
+                OR (d.is_preloaded = FALSE AND d.session_id IS NULL)
                 ORDER BY dc.embedding <-> '{embedding_str}'::vector
                 LIMIT :top_k
             """
@@ -401,7 +403,7 @@ def get_unindexed_chunks(session_id: Optional[str] = None) -> List[Tuple[int, in
                     dc.embedding
                 FROM document_chunks dc
                 JOIN documents d ON dc.document_id = d.id
-                WHERE d.lsh_indexed = FALSE
+                WHERE d.lsh_indexed = FALSE OR d.lsh_indexed IS NULL
             """
             params = {}
             

@@ -52,6 +52,7 @@ USE_LSH_SEARCH: bool = os.getenv("USE_LSH_SEARCH", "false").lower() in (
 )
 REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_DB: int = int(os.getenv("REDIS_DB", "0")) # Default Redis DB index
 LSH_NUM_PERM: int = int(os.getenv("LSH_NUM_PERM", "256"))
 LSH_SIMILARITY_THRESHOLD: float = float(os.getenv("LSH_SIMILARITY_THRESHOLD", "0.7"))
 LSH_REDIS_PREFIX: str = os.getenv("LSH_REDIS_PREFIX", "lsh:demo")
