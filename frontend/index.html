@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYNTHWAVE TERMINAL /// 2085</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Audiowide&family=Major+Mono+Display&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Background Elements -->
+    <div class="grid-background"></div>
+    <div class="sun"></div>
+    <div class="mountains"></div>
+    <div class="stars"></div>
+    <div class="scan-lines"></div>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Header -->
+        <header class="header-section">
+            <div class="neon-frame">
+                <h1 class="main-title glitch" data-text="SYNTHWAVE">SYNTHWAVE</h1>
+                <div class="subtitle-container">
+                    <span class="subtitle-text">TERMINAL</span>
+                    <span class="year">2085</span>
+                </div>
+                <div class="status-bar">
+                    <div class="status-item">
+                        <span class="status-label">SESSION</span>
+                        <span id="session-id" class="status-value">NULL</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">STATUS</span>
+                        <span class="status-value pulse">ONLINE</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">TIME</span>
+                        <span id="current-time" class="status-value">00:00:00</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <div class="content-wrapper">
+            <!-- Left Panel - File Upload -->
+            <div class="left-panel chrome-panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="icon">▲</span>
+                        DATA UPLOAD
+                        <span class="icon">▲</span>
+                    </div>
+                </div>
+
+                <div class="upload-zone" id="upload-area">
+                    <div class="upload-animation">
+                        <div class="upload-circle"></div>
+                        <div class="upload-circle"></div>
+                        <div class="upload-circle"></div>
+                    </div>
+                    <input type="file" id="file-input" hidden multiple accept=".txt">
+                    <label for="file-input" class="upload-label">
+                        <div class="upload-text">DROP FILES</div>
+                        <div class="upload-subtext">.TXT ONLY</div>
+                    </label>
+                </div>
+
+                <div class="file-counter">
+                    <span>FILES</span>
+                    <span id="file-count" class="counter-value">0/5</span>
+                </div>
+
+                <div class="file-list-container">
+                    <div id="file-list" class="file-list"></div>
+                </div>
+
+                <button id="upload-btn" class="neon-button upload-button" disabled>
+                    <span class="button-text">INITIALIZE UPLOAD</span>
+                    <div class="button-glow"></div>
+                </button>
+
+                <button id="clear-session-btn" class="neon-button danger-button">
+                    <span class="button-text">SYSTEM RESET</span>
+                    <div class="button-glow danger"></div>
+                </button>
+            </div>
+
+            <!-- Right Panel - Chat Terminal -->
+            <div class="right-panel chrome-panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="icon">◆</span>
+                        NEURAL INTERFACE
+                        <span class="icon">◆</span>
+                    </div>
+                </div>
+
+                <div class="terminal-screen">
+                    <div id="chat-history" class="chat-history"></div>
+                    <div class="terminal-cursor"></div>
+                </div>
+
+                <div class="input-section">
+                    <div class="input-wrapper">
+                        <span class="input-prefix">&gt;&gt;&gt;</span>
+                        <input type="text" id="question-input" class="neon-input" placeholder="ENTER QUERY..." disabled>
+                        <button id="send-btn" class="send-button" disabled>
+                            <span>TRANSMIT</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer-section">
+            <div class="footer-content">
+                <div class="footer-item">POWERED BY NEURAL NETWORKS</div>
+                <div class="footer-item">MIAMI PROTOCOL v3.14</div>
+                <div class="footer-item">© 2085 NEON CORP</div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Error Toast Container -->
+    <div id="error-toast-container"></div>
+
+    <!-- Audio Visualizer -->
+    <div class="visualizer">
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
