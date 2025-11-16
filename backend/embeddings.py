@@ -2,20 +2,40 @@
 Embeddings module for LLM File-Based Chatbot.
 
 Generates embeddings using Google Gemini API with batch processing
-and error handling.
+and error handling, or a local HuggingFace model.
 """
 
 import logging
 import time
-from typing import List
+from typing import List, Union
+import numpy as np
 import google.generativeai as genai
-from backend.config import GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL
+from backend.config import (
+    GEMINI_API_KEY,
+    GEMINI_EMBEDDING_MODEL,
+    USE_LOCAL_EMBEDDINGS,
+    ALLOW_EMBEDDING_FALLBACK,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# Import local embeddings only if needed to avoid unnecessary dependency load
+if USE_LOCAL_EMBEDDINGS:
+    try:
+        from backend.local_embeddings import embed_texts_local
+    except ImportError as e:
+        logger.error(f"Failed to import local_embeddings: {e}")
+        # If import fails, we must fall back or fail fast
+        if not ALLOW_EMBEDDING_FALLBACK:
+            raise RuntimeError("Local embeddings enabled but failed to import.") from e
+        # If fallback is allowed, we proceed with remote only
+        USE_LOCAL_EMBEDDINGS = False
+        logger.warning("Falling back to remote Gemini embeddings.")
+
 # Configure Gemini API
-genai.configure(api_key=GEMINI_API_KEY)
+if not USE_LOCAL_EMBEDDINGS or ALLOW_EMBEDDING_FALLBACK:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 # Batch size for embedding generation
 BATCH_SIZE = 100
@@ -29,8 +49,7 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
     """
     Generates embeddings for multiple texts using batch processing.
 
-    Processes texts in batches to optimize API usage and handles
-    API failures with retry logic and exponential backoff.
+    Uses local model if USE_LOCAL_EMBEDDINGS is true, otherwise falls back to Gemini.
 
     Args:
         texts: List of text strings to embed
@@ -45,7 +64,27 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
         logger.warning("embed_texts called with empty list")
         return []
 
-    logger.info(f"Generating embeddings for {len(texts)} texts")
+    if USE_LOCAL_EMBEDDINGS:
+        try:
+            logger.info(f"Generating local embeddings for {len(texts)} texts")
+            # Local model returns np.ndarray
+            embeddings_np = embed_texts_local(texts)
+            # Convert numpy array to list of lists for compatibility
+            return embeddings_np.tolist()
+        except Exception as e:
+            if ALLOW_EMBEDDING_FALLBACK:
+                logger.warning(
+                    f"Local embedding failed: {str(e)}. Falling back to Gemini."
+                )
+            else:
+                logger.error(
+                    f"Local embedding failed and fallback is disabled: {str(e)}",
+                    exc_info=True,
+                )
+                raise RuntimeError("Local embedding failed and fallback is disabled.") from e
+
+    # Fallback / Default: Gemini API
+    logger.info(f"Generating Gemini embeddings for {len(texts)} texts")
 
     all_embeddings = []
 
@@ -129,7 +168,7 @@ def embed_query(text: str) -> List[float]:
     """
     Generates embedding for a single query text.
 
-    Uses retrieval_query task type for optimal query embedding.
+    Uses local model if USE_LOCAL_EMBEDDINGS is true, otherwise falls back to Gemini.
 
     Args:
         text: Query text to embed
@@ -144,7 +183,27 @@ def embed_query(text: str) -> List[float]:
         logger.warning("embed_query called with empty text")
         raise ValueError("Query text cannot be empty")
 
-    logger.info(f"Generating embedding for query: {text[:50]}...")
+    if USE_LOCAL_EMBEDDINGS:
+        try:
+            logger.info(f"Generating local embedding for query: {text[:50]}...")
+            # Local model returns np.ndarray of shape (1, dim)
+            embedding_np = embed_texts_local([text])
+            # Convert numpy array to list of floats for compatibility
+            return embedding_np[0].tolist()
+        except Exception as e:
+            if ALLOW_EMBEDDING_FALLBACK:
+                logger.warning(
+                    f"Local query embedding failed: {str(e)}. Falling back to Gemini."
+                )
+            else:
+                logger.error(
+                    f"Local query embedding failed and fallback is disabled: {str(e)}",
+                    exc_info=True,
+                )
+                raise RuntimeError("Local query embedding failed and fallback is disabled.") from e
+
+    # Fallback / Default: Gemini API
+    logger.info(f"Generating Gemini embedding for query: {text[:50]}...")
 
     # Retry logic with exponential backoff
     for attempt in range(MAX_RETRIES):

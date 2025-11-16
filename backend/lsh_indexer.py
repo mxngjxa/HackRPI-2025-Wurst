@@ -1,17 +1,19 @@
 import logging
 import numpy as np
 from typing import List, Tuple, Optional
+import time # Import time for query timing
 
 from lshrs import LSHRS
 from sqlalchemy import text
 from backend.config import (
-    DATABASE_URL,
     REDIS_HOST,
     REDIS_PORT,
     LSH_NUM_PERM,
     LSH_SIMILARITY_THRESHOLD,
     LSH_REDIS_PREFIX,
     EMBEDDING_DIMENSION,
+    DOCUMENT_CHUNKS_TABLE,
+    EMBEDDING_COLUMN,
 )
 from backend.db import get_engine, get_unindexed_chunks, mark_document_as_indexed
 
@@ -33,12 +35,12 @@ class LSHIndexer:
             redis_host=redis_host,
             redis_port=redis_port,
             redis_prefix=LSH_REDIS_PREFIX,
-            vector_fetch_fn=self.fetch_vectors_from_postgres
+            vector_fetch_fn=self._fetch_vectors_for_lshrs
         )
         self.engine = get_engine()
         self.similarity_threshold = LSH_SIMILARITY_THRESHOLD
 
-    def fetch_vectors_from_postgres(self, chunk_ids: List[str]) -> List[Tuple[str, np.ndarray]]:
+    def _fetch_vectors_for_lshrs(self, chunk_ids: List[str]) -> List[Tuple[str, np.ndarray]]:
         """
         Bridge function for LSHRS vector_fetch_fn.
         Fetches full embedding vectors from PostgreSQL for a list of chunk IDs.
@@ -60,9 +62,9 @@ class LSHIndexer:
         try:
             with self.engine.connect() as conn:
                 # Use ANY to query for multiple IDs
-                query = """
-                    SELECT id, embedding
-                    FROM document_chunks
+                query = f"""
+                    SELECT id, {EMBEDDING_COLUMN}
+                    FROM {DOCUMENT_CHUNKS_TABLE}
                     WHERE id = ANY(:chunk_ids)
                 """
                 
@@ -129,7 +131,7 @@ class LSHIndexer:
                 batch_embeddings = embeddings[i:i + BATCH_SIZE]
                 
                 # Add to LSH index (this handles signature generation and Redis storage)
-                self.lsh.add_vectors(batch_ids, batch_embeddings)
+                self.lsh.index(batch_ids, batch_embeddings)
                 indexed_count += len(batch_ids)
                 
                 logger.debug(f"Indexed batch of {len(batch_ids)} chunks for document {document_id}. Total indexed: {indexed_count}")
@@ -138,12 +140,48 @@ class LSHIndexer:
             mark_document_as_indexed(document_id)
             logger.info(f"Document {document_id} marked as LSH indexed.")
 
+        # Log the final index size (approximate)
+        try:
+            index_size = self.lsh.get_index_size()
+            logger.info(f"LSH index size after indexing: {index_size} entries.")
+        except Exception as e:
+            logger.warning(f"Could not get LSH index size: {str(e)}")
+
         logger.info(f"LSH indexing complete. Total chunks indexed: {indexed_count}")
         return indexed_count
 
-    def hybrid_search(self, query_embedding: np.ndarray, top_k: int = 5) -> List[int]:
+    def index_new_chunks(self, chunk_ids: List[int], embeddings: np.ndarray) -> None:
+        """
+        Indexes new document chunks into the LSH index.
+        
+        Args:
+            chunk_ids: List of chunk IDs (integers) to index.
+            embeddings: Numpy array of embedding vectors corresponding to the IDs.
+        """
+        if not chunk_ids or embeddings.size == 0:
+            logger.warning("index_new_chunks called with empty data.")
+            return
+
+        if len(chunk_ids) != embeddings.shape[0]:
+            raise ValueError(
+                f"ID count ({len(chunk_ids)}) must match embedding count ({embeddings.shape[0]})"
+            )
+
+        logger.info(f"Indexing {len(chunk_ids)} new chunks into LSH index.")
+        
+        # LSHRS expects string IDs
+        str_chunk_ids = [str(cid) for cid in chunk_ids]
+        
+        # Add to LSH index (this handles signature generation and Redis storage)
+        self.lsh.index(str_chunk_ids, embeddings)
+        
+        logger.debug(f"Successfully indexed {len(chunk_ids)} chunks.")
+
+    def query_similar_chunks(self, query_embedding: np.ndarray, top_k: int) -> List[int]:
         """
         Performs a hybrid search: LSH candidate retrieval followed by cosine reranking.
+        
+        This is the public query function for the retrieval pipeline.
         
         Args:
             query_embedding: The embedding vector of the query.
@@ -155,32 +193,99 @@ class LSHIndexer:
         # Phase 1: LSH candidate retrieval (top 50)
         # The LSHRS get_top_k returns a list of (chunk_id, similarity) tuples
         # where chunk_id is a string.
+        start_time = time.time()
         candidates_with_sim = self.lsh.get_top_k(query_embedding, topk=50)
         
         if not candidates_with_sim:
             logger.info("LSH candidate retrieval returned no results.")
             return []
             
+        logger.debug(f"LSH candidate retrieval found {len(candidates_with_sim)} candidates.")
+            
         # Phase 2 & 3: Fetch full vectors from PostgreSQL and Rerank with cosine similarity
         # LSHRS handles this internally via vector_fetch_fn and reranking logic.
         # We use get_above_p to get all candidates above the similarity threshold,
         # which is a more robust approach than a fixed top-k for reranking.
         
-        # get_above_p returns a list of (chunk_id, similarity) tuples
-        reranked_results = self.lsh.get_above_p(
-            query_embedding, 
-            p=self.similarity_threshold, 
-            candidates=candidates_with_sim
-        )
+        # Check if LSHRS returned only IDs (list of ints) or (id, sim) tuples (list of tuples)
+        # The log shows a list of integers, so we check for that.
+        if candidates_with_sim and isinstance(candidates_with_sim[0], int):
+            logger.warning("LSHRS.get_top_k returned only IDs. Performing manual reranking.")
+            candidate_ids = [str(c) for c in candidates_with_sim]
+            
+            # Phase 2: Fetch full vectors for manual reranking
+            reranking_candidates = self._fetch_vectors_for_lshrs(candidate_ids)
+            
+            # Phase 3: Manually Rerank with cosine similarity
+            reranked_results = []
+            # Calculate the norm of the query embedding once
+            query_norm = np.linalg.norm(query_embedding)
+            
+            for chunk_id_str, vector in reranking_candidates:
+                # Cosine similarity: dot product / (norm_query * norm_vector)
+                vector_norm = np.linalg.norm(vector)
+                if query_norm == 0 or vector_norm == 0:
+                    similarity = 0.0
+                else:
+                    similarity = np.dot(query_embedding, vector) / (query_norm * vector_norm)
+                
+                reranked_results.append((chunk_id_str, similarity))
+        
+        elif candidates_with_sim and isinstance(candidates_with_sim[0], tuple) and len(candidates_with_sim[0]) == 2:
+            # LSHRS returned the expected (id, sim) tuples (hybrid search worked)
+            reranked_results = candidates_with_sim
+        else:
+            logger.error(f"LSHRS.get_top_k returned unexpected format: {candidates_with_sim}")
+            return []
+            
+        # Filter by similarity threshold
+        filtered_results = [
+            (chunk_id, sim) for chunk_id, sim in reranked_results
+            if sim >= self.similarity_threshold
+        ]
         
         # Sort by similarity (descending) and take top_k
-        reranked_results.sort(key=lambda x: x[1], reverse=True)
+        filtered_results.sort(key=lambda x: x[1], reverse=True)
         
         # Phase 4: Return top_k results
-        top_k_chunk_ids = [int(chunk_id) for chunk_id, _ in reranked_results[:top_k]]
+        top_k_chunk_ids = [int(chunk_id) for chunk_id, _ in filtered_results[:top_k]]
         
-        logger.info(f"Hybrid search returned {len(top_k_chunk_ids)} chunks.")
+        end_time = time.time()
+        logger.info(f"Hybrid search returned {len(top_k_chunk_ids)} chunks. Query time: {end_time - start_time:.4f}s")
         return top_k_chunk_ids
+
+    # The original hybrid_search is now query_similar_chunks.
+    # We keep the original name as an alias for backward compatibility if needed,
+    # but the task is to use query_similar_chunks.
+    hybrid_search = query_similar_chunks
+
+    def fetch_vectors(self, indices: List[int]) -> np.ndarray:
+        """
+        Fetches full embedding vectors from PostgreSQL for a list of chunk IDs.
+        
+        This function is for external use (e.g., testing or other modules) and 
+        returns a single numpy array of vectors.
+        
+        Args:
+            indices: List of chunk IDs (as integers) to fetch.
+            
+        Returns:
+            np.ndarray: A numpy array of vectors.
+        """
+        if not indices:
+            return np.array([])
+            
+        # The internal LSHRS fetcher returns a list of (id, vector) tuples
+        # We convert the integer indices to strings for the internal function
+        lshrs_results = self._fetch_vectors_for_lshrs([str(i) for i in indices])
+        
+        # Extract just the vectors and convert to a single numpy array
+        vectors = [vector for _, vector in lshrs_results]
+        
+        if not vectors:
+            return np.array([])
+            
+        return np.stack(vectors)
 
 # Global instance for easy access
 lsh_indexer: Optional[LSHIndexer] = None

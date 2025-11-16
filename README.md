@@ -11,14 +11,15 @@ This project is a file-based chatbot that uses a Large Language Model (LLM) to a
 
 -   **File Upload**: Upload text files to the chatbot.
 -   **RAG Pipeline**: Uses a Retrieval-Augmented Generation (RAG) pipeline to answer questions.
--   **Vector Search**: Uses pgvector for efficient similarity search.
+-   **Flexible Embeddings**: Supports both remote Gemini embeddings and local Jina-Embeddings for faster, cost-effective query processing.
+-   **Vector Search**: Uses pgvector as the source of truth, with an optional Redis-backed LSH index for accelerated search.
 -   **Containerized**: Comes with a `Dockerfile` for easy deployment.
 
 ## Prerequisites
 
 -   **Docker**: The application is containerized and requires Docker to run.
 -   **PostgreSQL**: A PostgreSQL database with the pgvector extension is required.
--   **Gemini API Key**: A Google Gemini API key is required for the LLM.
+-   **Gemini API Key**: A Google Gemini API key is required for the LLM (or configure to use local embeddings).
 
 ## Configuration
 
@@ -46,6 +47,19 @@ uv sync
 ```
 
 ### Running the Backend API
+
+```bash
+# intiial setup with database (takes around)
+uv run scripts/parquet_to_postgres.py && uv run scripts/build_lsh_index.py
+```
+
+which should return 
+```bash
+INFO:backend.lsh_indexer:LSH indexing complete. Total chunks indexed: 64078
+INFO:__main__:--- LSH Index Build Complete ---
+INFO:__main__:Total chunks indexed: 64078
+INFO:__main__:Time taken: 74.84 seconds
+```
 
 ```bash
 uv run main.py

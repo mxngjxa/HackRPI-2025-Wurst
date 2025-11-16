@@ -1,5 +1,11 @@
 import logging
 import time
+import sys
+from pathlib import Path
+
+# Add parent directory to path to import backend modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from backend.lsh_indexer import get_lsh_indexer
 from backend.db import init_db
 
@@ -34,7 +40,7 @@ def build_lsh_index():
         indexed_count = indexer.index_documents(session_id=None)
         end_time = time.time()
         
-        logger.info(f"--- LSH Index Build Complete ---")
+        logger.info("--- LSH Index Build Complete ---")
         logger.info(f"Total chunks indexed: {indexed_count}")
         logger.info(f"Time taken: {end_time - start_time:.2f} seconds")
         

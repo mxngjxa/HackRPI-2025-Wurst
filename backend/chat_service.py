@@ -8,14 +8,16 @@ and session management operations.
 import logging
 import uuid
 from typing import List, Tuple, Any
+import numpy as np
 
-from backend.config import MAX_FILES_PER_SESSION, CHUNK_SIZE, CHUNK_OVERLAP
+from backend.config import MAX_FILES_PER_SESSION, CHUNK_SIZE, CHUNK_OVERLAP, USE_LSH_SEARCH
 from backend.file_parser import read_txt_file, FileValidationError
 from backend.chunking import chunk_text
 from backend.embeddings import embed_texts
 from backend.db import insert_document, insert_chunks, clear_session_documents
 from backend.retrieval import get_context_chunks, format_context
 from backend.llm_client import get_llm_client
+from backend.lsh_indexer import get_lsh_indexer
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -106,7 +108,22 @@ def handle_upload(files: List[Any], session_id: str) -> Tuple[int, List[str]]:
             )
 
             # Insert chunks with embeddings
-            insert_chunks(document_id, chunks, embeddings)
+            chunk_ids = insert_chunks(document_id, chunks, embeddings)
+
+            # Step 5: Index chunks in LSH if enabled
+            if USE_LSH_SEARCH:
+                try:
+                    indexer = get_lsh_indexer()
+                    # Convert embeddings (List[List[float]]) to numpy array for LSHRS
+                    embeddings_np = np.array(embeddings)
+                    indexer.index_new_chunks(chunk_ids, embeddings_np)
+                    logger.info(f"Indexed {len(chunk_ids)} chunks in LSH for document_id: {document_id}")
+                except Exception as e:
+                    logger.error(
+                        f"Failed to index chunks in LSH for document_id {document_id}: {str(e)}",
+                        exc_info=True,
+                    )
+                    # Continue processing even if LSH indexing fails
 
             logger.info(
                 f"Successfully processed file: {filename} (document_id: {document_id})"
