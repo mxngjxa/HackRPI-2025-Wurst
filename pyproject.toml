@@ -12,10 +12,13 @@ dependencies = [
     "psycopg2-binary>=2.9.0",
     "python-dotenv>=1.0.0",
     "sqlalchemy>=2.0.0",
+    "torch>=2.9.1",
+    "transformers>=4.57.1",
 ]
 
 [dependency-groups]
 dev = [
+    "pandas>=2.3.3",
     "pytest>=9.0.1",
     "ruff>=0.14.5",
     "ty>=0.0.1a26",
